@@ -1,0 +1,62 @@
+#!/bin/bash
+
+# Read model from env or default to llama3.2, solid base model 
+MODEL="${OLLAMA_DEFAULT_MODEL:-llama3.2}"
+
+# Parse options
+while [[ "$1" =~ ^- ]]; do
+  case "$1" in
+    -m)
+      shift
+      MODEL="$1"
+      shift
+      ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+done
+
+# If input is passed directly
+if [ "$#" -gt 0 ]; then
+  QUESTION="$*"
+else
+  # Prompt interactively
+  echo -n "Question: "
+  read -r QUESTION
+fi
+
+if [ -z "$QUESTION" ]; then
+  echo "No question provided."
+  exit 1
+fi
+
+# ✅ Check if model exists locally
+if ! ollama list | grep -qw "$MODEL"; then
+  echo "Model '$MODEL' is not available locally."
+  read -p "Do you want to pull it now? (y/N): " CONFIRM
+  if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+    ollama pull "$MODEL" || {
+      echo "Failed to pull model '$MODEL'."
+      exit 1
+    }
+  else
+    echo "Aborting."
+    exit 1
+  fi
+fi
+
+# Prompt template
+FULL_PROMPT="You are a command-line expert. A user will ask you how to perform a task in Linux, and your job is to answer with:
+
+1. A single, complete, copy-paste-ready terminal command that solves the problem — this must be your first output.
+2. Then explain briefly and concisely what each part of the command does.
+3. Optionally, mention GUI-based or alternative methods only after the command-line answer, and only briefly.
+
+Avoid suggesting graphical tools unless explicitly requested. Answer in the language that the question was posed in.
+
+The user’s question is: $QUESTION"
+
+# Run the model
+ollama run "$MODEL" "$FULL_PROMPT"
