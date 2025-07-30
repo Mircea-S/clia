@@ -1,16 +1,11 @@
 #!/bin/bash
 
-# Read model from env or default
+# === Configuration ===
+# Use "local" for CLI; or set to remote IP like "http://192.168.1.50:11434"
+OLLAMA_HOST="${OLLAMA_HOST:-local}"
 MODEL="${OLLAMA_DEFAULT_MODEL:-llama3.2}"
 
-# Check if 'ollama' is installed
-if ! command -v ollama &>/dev/null; then
-  echo "❌ 'ollama' is not installed or not in your PATH."
-  echo "You can install it from: https://ollama.com/download"
-  exit 1
-fi
-
-# Parse options
+# === Parse options ===
 while [[ "$1" =~ ^- ]]; do
   case "$1" in
     -m)
@@ -25,11 +20,10 @@ while [[ "$1" =~ ^- ]]; do
   esac
 done
 
-# If input is passed directly
+# === Input handling ===
 if [ "$#" -gt 0 ]; then
   QUESTION="$*"
 else
-  # Prompt interactively
   echo -n "Question: "
   read -r QUESTION
 fi
@@ -39,22 +33,7 @@ if [ -z "$QUESTION" ]; then
   exit 1
 fi
 
-# ✅ Check if model exists locally
-if ! ollama list | grep -qw "$MODEL"; then
-  echo "Model '$MODEL' is not available locally."
-  read -p "Do you want to pull it now? (y/N): " CONFIRM
-  if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
-    ollama pull "$MODEL" || {
-      echo "Failed to pull model '$MODEL'."
-      exit 1
-    }
-  else
-    echo "Aborting."
-    exit 1
-  fi
-fi
-
-# Prompt template
+# === Prompt Template ===
 FULL_PROMPT=$(cat <<EOF
 You are a Linux expert. The user will ask questions about how to perform tasks or understand concepts in Linux.
 
@@ -74,5 +53,47 @@ $QUESTION
 EOF
 )
 
-# Run the model
-ollama run "$MODEL" "$FULL_PROMPT"
+# === Local Ollama ===
+if [[ "$OLLAMA_HOST" == "local" ]]; then
+  if ! command -v ollama &>/dev/null; then
+    echo "❌ 'ollama' is not installed or not in your PATH."
+    echo "You can install it from: https://ollama.com/download"
+    exit 1
+  fi
+
+  # Check if model is available locally
+  if ! ollama list | grep -qw "$MODEL"; then
+    echo "Model '$MODEL' is not available locally."
+    read -p "Do you want to pull it now? (y/N): " CONFIRM
+    if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+      ollama pull "$MODEL" || {
+        echo "Failed to pull model '$MODEL'."
+        exit 1
+      }
+    else
+      echo "Aborting."
+      exit 1
+    fi
+  fi
+
+  # Run locally
+  ollama run "$MODEL" "$FULL_PROMPT"
+
+# === Remote API ===
+else
+  RESPONSE=$(curl -s -X POST "$OLLAMA_HOST/api/chat" \
+    -H "Content-Type: application/json" \
+    -d @- <<EOF
+{
+  "model": "$MODEL",
+  "messages": [
+    { "role": "user", "content": "$FULL_PROMPT" }
+  ],
+  "stream": false
+}
+EOF
+)
+
+  # Extract "content"
+  echo "$RESPONSE" | grep -o '"content":[[:space:]]*".*"' | sed -E 's/^"content":[[:space:]]*"//' | sed 's/"$//' | sed 's/\\"/"/g; s/\\n/\n/g'
+fi
