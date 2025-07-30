@@ -9,10 +9,9 @@ I made it to avoid context-switching, having to move away from the terminal to s
 ## ✨ Features
 
 - Get terminal commands and clear explanations from LLMs like LLaMA, Mistral, etc.
-- Optional interactive mode (no quotes needed)
 - Change models via `-m` flag
-- Respects `OLLAMA_DEFAULT_MODEL` environment variable
-- Checks and offers to pull models if not already installed
+- Checks and offers to pull models if not already installed locally
+- Works for remote Ollama servers too, just set CLIA_HOST to the IP of the machine
 
 ## 🖥️ Example
 
