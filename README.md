@@ -1,4 +1,4 @@
-# clia
+# Clia - CLI Assistant
 🔧 Ask Linux command-line questions and get the command and simplified help answers from your local Ollama model — right from your terminal.
 ---
 
@@ -10,9 +10,9 @@ I made it to avoid context-switching, having to move away from the terminal to s
 
 - Get terminal commands and clear explanations from LLMs like LLaMA, Mistral, etc.
 - Optional interactive mode (no quotes needed)
-- Supports custom models via `-m` flag
+- Change models via `-m` flag
 - Respects `OLLAMA_DEFAULT_MODEL` environment variable
-- CLI-first answers — no GUI suggestions unless requested
+- Checks and offers to pull models if not already installed
 
 ## 🖥️ Example
 
@@ -43,7 +43,7 @@ you want to include in the archive.
 
 ## 🔧 Requirements
 
-* Ollama installed and running locally
+* [Ollama](https://ollama.com/)  installed and running locally
 * Bash or compatible shell
 
 ## 🧪 Quick Start
