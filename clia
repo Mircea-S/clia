@@ -1,26 +1,26 @@
 #!/bin/bash
 
-# === Configuration ===
-# Use "local" for CLI; or set to remote IP like "192.168.1.50"
-CLIA_HOST="${CLIA_HOST:-local}"
+# clia - Command Line Intelligence Assistant
+# A wrapper for ollama that acts as a Linux expert
 
-# Auto-detect API mode if CLIA_HOST contains an IP address (but not "local")
-if [[ "$CLIA_HOST" != "local" ]]; then
-  if [[ "$CLIA_HOST" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?$ ]]; then
-    # Add http:// and default port if needed
-    if [[ "$CLIA_HOST" =~ :[0-9]+$ ]]; then
-      CLIA_HOST="http://$CLIA_HOST"
-    else
-      CLIA_HOST="http://$CLIA_HOST:11434"
-    fi
-  elif [[ "$CLIA_HOST" =~ ^https?://[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?(/.*)?$ ]]; then
-    # Already a proper URL with IP, use as-is
-    :
-  fi
+set -euo pipefail
+
+# Function to show usage
+show_usage() {
+    echo "Usage: clia [question]"
+    echo "       clia \"how do I find large files?\""
+    echo ""
+    echo "Environment variables:"
+    echo "  CLIA_HOST          - 'local' or IP address of remote ollama server"
+    echo "  CLIA_DEFAULT_MODEL - Model to use (default: llama3.2)"
+    exit 1
+}
+
+# Check if question is provided
+if [ $# -eq 0 ]; then
+    show_usage
 fi
-MODEL="${OLLAMA_DEFAULT_MODEL:-llama3.2}"
 
-# === Parse options ===
 while [[ "$1" =~ ^- ]]; do
   case "$1" in
     -m)
@@ -35,79 +35,163 @@ while [[ "$1" =~ ^- ]]; do
   esac
 done
 
-# === Input handling ===
-if [ "$#" -gt 0 ]; then
-  QUESTION="$*"
-else
-  echo -n "Question: "
-  read -r QUESTION
-fi
+# Combine all arguments into the question
+QUESTION="$*"
 
-if [ -z "$QUESTION" ]; then
-  echo "No question provided."
-  exit 1
-fi
+# Get configuration from environment
+CLIA_HOST="${CLIA_HOST:-local}"
+CLIA_DEFAULT_MODEL="${CLIA_DEFAULT_MODEL:-llama3.2}"
 
-# === Prompt Template ===
-FULL_PROMPT=$(cat <<EOF
+# Function to call ollama locally or remotely
+call_ollama() {
+    local prompt="$1"
+    local model="${MODEL:-$CLIA_DEFAULT_MODEL}"
+    
+    if [ "$CLIA_HOST" = "local" ]; then
+         if ! command -v ollama &>/dev/null; then
+            echo "❌ 'ollama' is not installed or not in your PATH."
+            echo "You can install it from: https://ollama.com/download"
+            exit 1
+        fi
+
+        # Check if model is available locally
+        if ! ollama list | grep -qw "$model"; then
+            echo "Model '$model' is not available locally."
+            read -p "Do you want to pull it now? (y/N): " CONFIRM
+            if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
+            ollama pull "$model" || {
+                echo "Failed to pull model '$model'."
+                exit 1
+            }
+            else
+            echo "Aborting."
+            exit 1
+            fi
+        fi
+        # Use local ollama
+        ollama run "$model" "$prompt"
+    else
+        # Use remote ollama API with generate endpoint
+        # Escape the prompt for JSON using standard Unix tools
+        local escaped_prompt=$(printf '%s' "$prompt" | \
+            sed 's/\\/\\\\/g' | \
+            sed 's/"/\\"/g' | \
+            awk '{printf "%s\\n", $0}' | \
+            sed 's/\\n$//')
+        
+        curl -s -X POST "http://${CLIA_HOST}:11434/api/generate" \
+            -H "Content-Type: application/json" \
+            -d "{
+                \"model\": \"$model\",
+                \"prompt\": \"$escaped_prompt\",
+                \"stream\": false
+            }" | awk -F'"response":"' '{if(NF>1) print $2}' | \
+            awk -F'","' '{print $1}' | \
+            sed 's/\\n/\n/g; s/\\t/\t/g; s/\\r/\r/g; s/\\"/"/g; s/\\\\/\\/g'
+    fi
+}
+
+# Function to detect system information
+detect_system_info() {
+    local system_info=""
+    
+    # Try /etc/os-release first
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        system_info="Distribution: $NAME $VERSION_ID"
+        if [ -n "${VERSION_CODENAME:-}" ]; then
+            system_info="$system_info ($VERSION_CODENAME)"
+        fi
+    # Fallback to lsb_release
+    elif command -v lsb_release >/dev/null 2>&1; then
+        local distro=$(lsb_release -si 2>/dev/null)
+        local version=$(lsb_release -sr 2>/dev/null)
+        local codename=$(lsb_release -sc 2>/dev/null)
+        system_info="Distribution: $distro $version"
+        if [ -n "$codename" ]; then
+            system_info="$system_info ($codename)"
+        fi
+    else
+        system_info="Distribution: Unknown Linux"
+    fi
+    
+    # Add kernel info
+    system_info="$system_info, Kernel: $(uname -r)"
+    
+    echo "$system_info"
+}
+
+# Function to handle interactive system info setup
+get_system_info_interactive() {
+    local system_file="$HOME/.clia_system"
+    
+    if [ ! -f "$system_file" ]; then
+        # Detect system info
+        local detected_info=$(detect_system_info)
+        
+        echo "Detected system: $detected_info"
+        echo ""
+        echo "Do you want to save this system information to ~/.clia_system for future use? (y/n)"
+        read -r response
+        
+        if [[ "$response" =~ ^[Yy]$ ]]; then
+            echo "$detected_info" > "$system_file"
+            echo "System information saved to ~/.clia_system"
+            echo ""
+        fi
+    fi
+}
+
+# Function to get system info quietly (for command substitution)
+get_system_info_quiet() {
+    local system_file="$HOME/.clia_system"
+    
+    if [ -f "$system_file" ]; then
+        cat "$system_file"
+    else
+        detect_system_info
+    fi
+}
+
+# Main execution
+main() {
+    # Get system information
+    get_system_info_interactive
+    SYSTEM_INFO=$(get_system_info_quiet)
+    
+    # Build the system context
+    SYSTEM_CONTEXT=""
+    if [ -n "$SYSTEM_INFO" ]; then
+        SYSTEM_CONTEXT="System context: $SYSTEM_INFO
+
+"
+    fi
+    
+    # Create the full prompt
+    FULL_PROMPT=$(cat <<EOF
 You are a Linux expert. The user will ask questions about how to perform tasks or understand concepts in Linux.
 
+$SYSTEM_CONTEXT
 Your job is to:
 
 1. If the question is about **doing something in Linux**, provide a single, complete, copy-paste-ready terminal command first.
+   - Tailor commands to the user's specific Linux distribution when relevant
    - Then explain each part of the command clearly.
    - Only mention graphical or alternative methods at the end, and only if appropriate.
 2. If the question is about **understanding a concept** (e.g. "what are efivars?"), provide a clear explanation targeted at an intermediate technical user.
    - Use concise, accurate language and examples if helpful.
    - If relevant, mention any related commands or system paths.
 
-Never start your answer with GUI-based suggestions unless explicitly asked.
+Keep responses concise and practical. Avoid excessive markdown formatting - use simple formatting that reads well in a terminal.
 
-Here is the user’s question:
+Here is the user's question:
 $QUESTION
 EOF
 )
+    
+    # Call ollama with the prompt
+    call_ollama "$FULL_PROMPT"
+}
 
-# === Local Ollama ===
-if [[ "$CLIA_HOST" == "local" ]]; then
-  if ! command -v ollama &>/dev/null; then
-    echo "❌ 'ollama' is not installed or not in your PATH."
-    echo "You can install it from: https://ollama.com/download"
-    exit 1
-  fi
-
-# Check if model is available locally
-  if ! ollama list | grep -qw "$MODEL"; then
-    echo "Model '$MODEL' is not available locally."
-    read -p "Do you want to pull it now? (y/N): " CONFIRM
-    if [[ "$CONFIRM" =~ ^[Yy]$ ]]; then
-      ollama pull "$MODEL" || {
-        echo "Failed to pull model '$MODEL'."
-        exit 1
-      }
-    else
-      echo "Aborting."
-      exit 1
-    fi
-  fi
-
-  # Run locally
-  ollama run "$MODEL" "$FULL_PROMPT"
-
-# === Remote API ===
-else
-  # Escape quotes and newlines for JSON
-  ESCAPED_PROMPT=$(echo "$FULL_PROMPT" | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' | tr -d '\n' | sed 's/\\n$//')
-  
-  # Stream the response and extract content in real-time
-  curl -s -X POST "$CLIA_HOST/api/chat" \
-    -H "Content-Type: application/json" \
-    -d "{\"model\": \"$MODEL\", \"messages\": [{\"role\": \"user\", \"content\": \"$ESCAPED_PROMPT\"}], \"stream\": true}" \
-    | while IFS= read -r line; do
-        if [[ "$line" =~ \"content\":\"([^\"]*)\" ]]; then
-          content="${BASH_REMATCH[1]}"
-          # Unescape and print content
-          echo -n "$content" | sed 's/\\n/\n/g; s/\\"/"/g'
-        fi
-      done
-fi
+# Run main function
+main
