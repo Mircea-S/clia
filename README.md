@@ -49,9 +49,20 @@ you want to include in the archive.
 ## 🧪 Quick Start
 
 ```
-curl -o ~/bin/clia https://raw.githubusercontent.com/Mircea-S/clia/main/clia
+# 1. Create bin dir to store the tool
+mkdir -p ~/bin
+
+# 2. Download the script
+curl -fsSL -o ~/bin/clia https://raw.githubusercontent.com/Mircea-S/clia/main/clia
+
+# 3. Make it executable
 chmod +x ~/bin/clia
-export OLLAMA_DEFAULT_MODEL=llama3.2
+
+# 4. Add to ~/.bashrc (or ~/.zshrc if using Zsh)
+echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
+echo 'export OLLAMA_DEFAULT_MODEL=llama3.2' >> ~/.bashrc
+
+# 5. Reload shell
 source ~/.bashrc
 ```
 
