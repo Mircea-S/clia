@@ -96,19 +96,18 @@ if [[ "$CLIA_HOST" == "local" ]]; then
 
 # === Remote API ===
 else
-  RESPONSE=$(curl -s -X POST "$CLIA_HOST/api/chat" \
+  # Escape quotes and newlines for JSON
+  ESCAPED_PROMPT=$(echo "$FULL_PROMPT" | sed 's/\\/\\\\/g; s/"/\\"/g; s/$/\\n/' | tr -d '\n' | sed 's/\\n$//')
+  
+  # Stream the response and extract content in real-time
+  curl -s -X POST "$CLIA_HOST/api/chat" \
     -H "Content-Type: application/json" \
-    -d @- <<EOF
-{
-  "model": "$MODEL",
-  "messages": [
-    { "role": "user", "content": "$FULL_PROMPT" }
-  ],
-  "stream": false
-}
-EOF
-)
-
-  # Naively extract "content"
-  echo "$RESPONSE" | grep -o '"content":[[:space:]]*".*"' | sed -E 's/^"content":[[:space:]]*"//' | sed 's/"$//' | sed 's/\\"/"/g; s/\\n/\n/g'
+    -d "{\"model\": \"$MODEL\", \"messages\": [{\"role\": \"user\", \"content\": \"$ESCAPED_PROMPT\"}], \"stream\": true}" \
+    | while IFS= read -r line; do
+        if [[ "$line" =~ \"content\":\"([^\"]*)\" ]]; then
+          content="${BASH_REMATCH[1]}"
+          # Unescape and print content
+          echo -n "$content" | sed 's/\\n/\n/g; s/\\"/"/g'
+        fi
+      done
 fi
