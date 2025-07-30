@@ -1,8 +1,23 @@
 #!/bin/bash
 
 # === Configuration ===
-# Use "local" for CLI; or set to remote IP like "http://192.168.1.50:11434"
+# Use "local" for CLI; or set to remote IP like "192.168.1.50"
 OLLAMA_HOST="${OLLAMA_HOST:-local}"
+
+# Auto-detect API mode if OLLAMA_HOST contains an IP address (but not "local")
+if [[ "$OLLAMA_HOST" != "local" ]]; then
+  if [[ "$OLLAMA_HOST" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?$ ]]; then
+    # Add http:// and default port if needed
+    if [[ "$OLLAMA_HOST" =~ :[0-9]+$ ]]; then
+      OLLAMA_HOST="http://$OLLAMA_HOST"
+    else
+      OLLAMA_HOST="http://$OLLAMA_HOST:11434"
+    fi
+  elif [[ "$OLLAMA_HOST" =~ ^https?://[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?(/.*)?$ ]]; then
+    # Already a proper URL with IP, use as-is
+    :
+  fi
+fi
 MODEL="${OLLAMA_DEFAULT_MODEL:-llama3.2}"
 
 # === Parse options ===
@@ -94,6 +109,6 @@ else
 EOF
 )
 
-  # Extract "content"
+  # Naively extract "content"
   echo "$RESPONSE" | grep -o '"content":[[:space:]]*".*"' | sed -E 's/^"content":[[:space:]]*"//' | sed 's/"$//' | sed 's/\\"/"/g; s/\\n/\n/g'
 fi
