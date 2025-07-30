@@ -2,8 +2,10 @@
 🔧 Ask Linux command-line questions and get the command and simplified help answers from your local Ollama model — right from your terminal.
 ---
 
-A minimalist Bash tool that lets you ask Linux-related command-line questions directly from your terminal and get expert, copy-paste-ready answers powered by your local [Ollama](https://ollama.com/) model.
-I made it to avoid context-switching, having to mvoe away from the terminal to search for a command. 
+A minimalist Bash tool that lets you ask Linux-related command-line questions directly from your terminal and get expert, copy-paste-ready answers powered by your local [Ollama](https://ollama.com/) server.
+
+I made it to avoid context-switching, having to move away from the terminal to search for a command help query. Feel free to propose suggestions and improvements.
+
 ## ✨ Features
 
 - Get terminal commands and clear explanations from LLMs like LLaMA, Mistral, etc.
