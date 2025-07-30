@@ -60,7 +60,7 @@ chmod +x ~/bin/clia
 
 # 4. Add to ~/.bashrc (or ~/.zshrc if using Zsh)
 echo 'export CLIA_HOST=local' >> ~/.bashrc #replace with the IP of the server if using a remote Ollama
-echo 'export OLLAMA_DEFAULT_MODEL=llama3.2' >> ~/.bashrc # or any other model available
+echo 'export CLIA_DEFAULT_MODEL=llama3.2' >> ~/.bashrc # or any other model available
 echo 'export PATH="$HOME/bin:$PATH"' >> ~/.bashrc
 
 # 5. Reload shell and enjoy
