@@ -2,18 +2,18 @@
 
 # === Configuration ===
 # Use "local" for CLI; or set to remote IP like "192.168.1.50"
-OLLAMA_HOST="${OLLAMA_HOST:-local}"
+CLIA_HOST="${CLIA_HOST:-local}"
 
-# Auto-detect API mode if OLLAMA_HOST contains an IP address (but not "local")
-if [[ "$OLLAMA_HOST" != "local" ]]; then
-  if [[ "$OLLAMA_HOST" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?$ ]]; then
+# Auto-detect API mode if CLIA_HOST contains an IP address (but not "local")
+if [[ "$CLIA_HOST" != "local" ]]; then
+  if [[ "$CLIA_HOST" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?$ ]]; then
     # Add http:// and default port if needed
-    if [[ "$OLLAMA_HOST" =~ :[0-9]+$ ]]; then
-      OLLAMA_HOST="http://$OLLAMA_HOST"
+    if [[ "$CLIA_HOST" =~ :[0-9]+$ ]]; then
+      CLIA_HOST="http://$CLIA_HOST"
     else
-      OLLAMA_HOST="http://$OLLAMA_HOST:11434"
+      CLIA_HOST="http://$CLIA_HOST:11434"
     fi
-  elif [[ "$OLLAMA_HOST" =~ ^https?://[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?(/.*)?$ ]]; then
+  elif [[ "$CLIA_HOST" =~ ^https?://[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}(:[0-9]+)?(/.*)?$ ]]; then
     # Already a proper URL with IP, use as-is
     :
   fi
@@ -69,14 +69,14 @@ EOF
 )
 
 # === Local Ollama ===
-if [[ "$OLLAMA_HOST" == "local" ]]; then
+if [[ "$CLIA_HOST" == "local" ]]; then
   if ! command -v ollama &>/dev/null; then
     echo "❌ 'ollama' is not installed or not in your PATH."
     echo "You can install it from: https://ollama.com/download"
     exit 1
   fi
 
-  # Check if model is available locally
+# Check if model is available locally
   if ! ollama list | grep -qw "$MODEL"; then
     echo "Model '$MODEL' is not available locally."
     read -p "Do you want to pull it now? (y/N): " CONFIRM
@@ -96,7 +96,7 @@ if [[ "$OLLAMA_HOST" == "local" ]]; then
 
 # === Remote API ===
 else
-  RESPONSE=$(curl -s -X POST "$OLLAMA_HOST/api/chat" \
+  RESPONSE=$(curl -s -X POST "$CLIA_HOST/api/chat" \
     -H "Content-Type: application/json" \
     -d @- <<EOF
 {
