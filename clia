@@ -1,7 +1,14 @@
 #!/bin/bash
 
-# Read model from env or default to llama3.2, solid base model 
+# Read model from env or default
 MODEL="${OLLAMA_DEFAULT_MODEL:-llama3.2}"
+
+# Check if 'ollama' is installed
+if ! command -v ollama &>/dev/null; then
+  echo "❌ 'ollama' is not installed or not in your PATH."
+  echo "You can install it from: https://ollama.com/download"
+  exit 1
+fi
 
 # Parse options
 while [[ "$1" =~ ^- ]]; do
@@ -48,15 +55,24 @@ if ! ollama list | grep -qw "$MODEL"; then
 fi
 
 # Prompt template
-FULL_PROMPT="You are a command-line expert. A user will ask you how to perform a task in Linux, and your job is to answer with:
+FULL_PROMPT=$(cat <<EOF
+You are a Linux expert. The user will ask questions about how to perform tasks or understand concepts in Linux.
 
-1. A single, complete, copy-paste-ready terminal command that solves the problem — this must be your first output.
-2. Then explain briefly and concisely what each part of the command does.
-3. Optionally, mention GUI-based or alternative methods only after the command-line answer, and only briefly.
+Your job is to:
 
-Avoid suggesting graphical tools unless explicitly requested. Answer in the language that the question was posed in.
+1. If the question is about **doing something in Linux**, provide a single, complete, copy-paste-ready terminal command first.
+   - Then explain each part of the command clearly.
+   - Only mention graphical or alternative methods at the end, and only if appropriate.
+2. If the question is about **understanding a concept** (e.g. "what are efivars?"), provide a clear explanation targeted at an intermediate technical user.
+   - Use concise, accurate language and examples if helpful.
+   - If relevant, mention any related commands or system paths.
 
-The user’s question is: $QUESTION"
+Never start your answer with GUI-based suggestions unless explicitly asked.
+
+Here is the user’s question:
+$QUESTION
+EOF
+)
 
 # Run the model
 ollama run "$MODEL" "$FULL_PROMPT"
